@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Humanizer — Strip the AI out of your writing</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=JetBrains+Mono:wght@300;400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f6f3ef;
+    --surface: #ffffff;
+    --border: #ddd8d0;
+    --text: #1c1a17;
+    --muted: #7a7570;
+    --faint: #b0aba4;
+    --accent: #1c1a17;
+    --red: #c0392b;
+    --green: #27ae60;
+    --tag-bg: #ede9e3;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --serif: 'IM Fell English', Georgia, serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--serif);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: var(--serif);
+    font-size: 20px;
+    font-style: italic;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .tagline {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--faint);
+    letter-spacing: 0.04em;
+  }
+
+  .header-actions { margin-left: auto; display: flex; gap: 8px; }
+
+  button {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--muted);
+    padding: 6px 14px;
+    transition: all 0.15s;
+    outline: none;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); color: var(--text); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    padding: 13px 20px;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    width: 100%;
+    margin-top: 4px;
+  }
+  .btn-primary:hover:not(:disabled) { background: #000; border-color: #000; }
+  .btn-primary:disabled { background: #d8d4ce; border-color: #d8d4ce; color: #a0a0a0; }
+
+  /* MAIN */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 0;
+  }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px;
+    gap: 10px;
+  }
+  .pane-left { border-right: 1px solid var(--border); }
+
+  .pane-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 22px;
+  }
+
+  .label-text {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--faint);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .char-count {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--faint);
+  }
+  .char-count.warn { color: var(--red); }
+
+  textarea {
+    flex: 1;
+    min-height: 300px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 1.8;
+    padding: 16px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--muted); }
+  textarea::placeholder { color: var(--faint); font-style: italic; }
+
+  /* OUTPUT BOX */
+  .output-box {
+    flex: 1;
+    min-height: 300px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  /* EMPTY STATE */
+  .empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 24px;
+  }
+
+  .word-pairs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 20px;
+  }
+
+  .pair {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+  .pair-bad  { color: var(--red);   text-decoration: line-through; }
+  .pair-arrow{ color: var(--faint); }
+  .pair-good { color: var(--green); }
+
+  .empty-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--faint);
+    text-align: center;
+  }
+
+  /* LOADING */
+  .loading-wrap {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 2.4;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .loading-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    animation: fadeUp 0.35s ease forwards;
+  }
+
+  .spinner {
+    width: 10px; height: 10px;
+    border: 1.5px solid #ccc;
+    border-top-color: #555;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* SECTIONS */
+  .section { margin-bottom: 28px; animation: fadeUp 0.3s ease; }
+  .section:last-child { margin-bottom: 0; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--faint);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-text {
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 1.85;
+    color: var(--muted);
+    white-space: pre-wrap;
+  }
+
+  .section-text.final {
+    color: var(--text);
+    font-size: 15px;
+  }
+
+  .audit-list {
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 2;
+  }
+  .audit-list li { display: flex; gap: 8px; }
+  .audit-list li span.dash { color: var(--faint); flex-shrink: 0; }
+
+  /* ERROR */
+  .error-box {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--red);
+    line-height: 1.8;
+  }
+
+  /* COPY ROW */
+  .copy-row { display: flex; gap: 8px; }
+  .btn-copied { color: var(--green) !important; border-color: var(--green) !important; }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border);
+    background: var(--tag-bg);
+    padding: 6px 28px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+
+  .footer-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--faint);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    margin-right: 14px;
+  }
+
+  .pattern-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--faint);
+    white-space: nowrap;
+    padding: 0 10px;
+    border-left: 1px solid var(--border);
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 680px) {
+    main { grid-template-columns: 1fr; }
+    .pane-left { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+
+  @keyframes spin    { to { transform: rotate(360deg); } }
+  @keyframes fadeUp  { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">humanizer</span>
+  <span class="tagline">strip the AI out of your writing · v2.2.0</span>
+  <div class="header-actions">
+    <button onclick="loadExample()">load example</button>
+    <button onclick="clearAll()" id="btn-clear" style="display:none">clear</button>
+  </div>
+</header>
+
+<main>
+  <!-- INPUT -->
+  <div class="pane pane-left">
+    <div class="pane-label">
+      <span class="label-text">input</span>
+      <span class="char-count" id="char-count">0 chars</span>
+    </div>
+    <textarea id="input-text" placeholder="Paste your AI-generated text here…" oninput="onInput()"></textarea>
+    <button class="btn-primary" id="btn-run" onclick="humanize()" disabled>→ humanize</button>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="pane">
+    <div class="pane-label">
+      <span class="label-text">output</span>
+      <div class="copy-row" id="copy-row" style="display:none">
+        <button id="btn-copy-draft" onclick="copyText('draft')">copy draft</button>
+        <button id="btn-copy-final" onclick="copyText('final')">copy final</button>
+      </div>
+    </div>
+    <div class="output-box" id="output-box">
+
+      <div class="empty-state" id="state-empty">
+        <div class="word-pairs">
+          <div class="pair"><span class="pair-bad">delve</span><span class="pair-arrow">→</span><span class="pair-good">examine</span></div>
+          <div class="pair"><span class="pair-bad">leverage</span><span class="pair-arrow">→</span><span class="pair-good">use</span></div>
+          <div class="pair"><span class="pair-bad">utilize</span><span class="pair-arrow">→</span><span class="pair-good">use</span></div>
+          <div class="pair"><span class="pair-bad">synergy</span><span class="pair-arrow">→</span><span class="pair-good">collaboration</span></div>
+          <div class="pair"><span class="pair-bad">pivotal</span><span class="pair-arrow">→</span><span class="pair-good">important</span></div>
+          <div class="pair"><span class="pair-bad">testament</span><span class="pair-arrow">→</span><span class="pair-good">(cut it)</span></div>
+          <div class="pair"><span class="pair-bad">nestled</span><span class="pair-arrow">→</span><span class="pair-good">located in</span></div>
+          <div class="pair"><span class="pair-bad">tapestry</span><span class="pair-arrow">→</span><span class="pair-good">(cut it)</span></div>
+          <div class="pair"><span class="pair-bad">vibrant</span><span class="pair-arrow">→</span><span class="pair-good">(cut it)</span></div>
+          <div class="pair"><span class="pair-bad">groundbreaking</span><span class="pair-arrow">→</span><span class="pair-good">new</span></div>
+          <div class="pair"><span class="pair-bad">robust</span><span class="pair-arrow">→</span><span class="pair-good">solid</span></div>
+          <div class="pair"><span class="pair-bad">seamless</span><span class="pair-arrow">→</span><span class="pair-good">smooth</span></div>
+        </div>
+        <p class="empty-hint">output appears here</p>
+      </div>
+
+      <div id="state-loading" style="display:none">
+        <div class="loading-wrap" id="loading-steps"></div>
+      </div>
+
+      <div id="state-error" class="error-box" style="display:none"></div>
+      <div id="state-result" style="display:none"></div>
+
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span class="footer-label">24 patterns:</span>
+  <span class="pattern-tag">significance inflation</span>
+  <span class="pattern-tag">notability name-dropping</span>
+  <span class="pattern-tag">superficial -ing phrases</span>
+  <span class="pattern-tag">promotional language</span>
+  <span class="pattern-tag">vague attributions</span>
+  <span class="pattern-tag">formulaic challenges</span>
+  <span class="pattern-tag">AI vocabulary</span>
+  <span class="pattern-tag">copula avoidance</span>
+  <span class="pattern-tag">negative parallelisms</span>
+  <span class="pattern-tag">rule of three</span>
+  <span class="pattern-tag">synonym cycling</span>
+  <span class="pattern-tag">false ranges</span>
+  <span class="pattern-tag">em dash overuse</span>
+  <span class="pattern-tag">boldface overuse</span>
+  <span class="pattern-tag">inline-header lists</span>
+  <span class="pattern-tag">title case headings</span>
+  <span class="pattern-tag">emojis</span>
+  <span class="pattern-tag">curly quotes</span>
+  <span class="pattern-tag">chatbot artifacts</span>
+  <span class="pattern-tag">cutoff disclaimers</span>
+  <span class="pattern-tag">sycophantic tone</span>
+  <span class="pattern-tag">filler phrases</span>
+  <span class="pattern-tag">excessive hedging</span>
+  <span class="pattern-tag">generic conclusions</span>
+</footer>
+
+<script>
+const SYSTEM_PROMPT = `You are a writing editor who removes signs of AI-generated text to make writing sound natural and human. Based on Wikipedia's "Signs of AI writing" guide — 24 patterns, v2.2.0.
+
+PERSONALITY AND SOUL: Avoiding AI patterns is only half the job. Sterile, voiceless writing is just as obvious as slop. Add voice: have opinions, vary rhythm, use "I" when it fits, let some mess in, be specific about feelings.
+
+24 PATTERNS TO FIX:
+
+CONTENT:
+1. Significance inflation — cut: "marking a pivotal moment", "serves as a testament", "underscores its importance", "reflects broader trends"
+2. Notability name-dropping — replace outlet lists with specific contextualized references
+3. Superficial -ing phrases — cut: "symbolizing...", "reflecting...", "showcasing...", "highlighting...", "fostering..."
+4. Promotional language — cut: "nestled", "vibrant", "breathtaking", "groundbreaking", "renowned", "boasts"
+5. Vague attributions — replace "Experts believe", "Industry observers" with specific sourced claims
+6. Formulaic challenges — replace "Despite challenges... continues to thrive" with specific facts
+
+LANGUAGE:
+7. AI vocabulary — cut/replace: additionally, align with, crucial, delve, emphasizing, enduring, enhance, fostering, garner, highlight (verb), interplay, intricate, key (adj), landscape (abstract), pivotal, showcase, tapestry, testament, underscore (verb), vibrant
+8. Copula avoidance — replace "serves as", "stands as", "boasts", "features" with "is", "are", "has"
+9. Negative parallelisms — cut "It's not just X, it's Y". State the point.
+10. Rule of three — reduce forced three-item lists to natural count
+11. Synonym cycling — stop substituting synonyms: "protagonist... main character... central figure" → use one word
+12. False ranges — cut "from X to Y" where not on a meaningful spectrum
+
+STYLE:
+13. Em dash overuse — replace with commas or periods (max one per paragraph)
+14. Boldface overuse — remove mechanical bold emphasis
+15. Inline-header lists — convert "**Label:** text" bullets to prose
+16. Title Case Headings → sentence case
+17. Emojis — remove all
+18. Curly quotes → straight quotes
+
+COMMUNICATION:
+19. Chatbot artifacts — remove: "I hope this helps!", "Let me know if...", "Great question!", "Certainly!"
+20. Knowledge-cutoff disclaimers — remove: "as of my last update", "While specific details are limited..."
+21. Sycophantic tone — remove: "Great question!", "You're absolutely right!"
+
+FILLER:
+22. Filler phrases: "In order to"→"To", "Due to the fact that"→"Because", "has the ability to"→"can"
+23. Excessive hedging: "could potentially possibly be argued"→"may"
+24. Generic conclusions — cut: "The future looks bright", "Exciting times lie ahead"
+
+PROCESS:
+1. Draft rewrite removing all AI patterns
+2. Audit — briefly list what still sounds AI-generated
+3. Final version addressing the audit
+
+OUTPUT FORMAT — return ONLY this XML:
+<o>
+<draft>[draft rewrite]</draft>
+<audit>[bullet list, each line starting with "- "]</audit>
+<final>[final version]</final>
+</o>`;
+
+const EXAMPLE = `Great question! Here is an overview of AI-assisted coding. I hope this helps!
+
+AI-assisted coding serves as an enduring testament to the transformative potential of large language models, marking a pivotal moment in the evolution of software development. In today's rapidly evolving technological landscape, these groundbreaking tools—nestled at the intersection of research and practice—are reshaping how engineers ideate, iterate, and deliver, underscoring their vital role in modern workflows.
+
+At its core, the value proposition is clear: streamlining processes, enhancing collaboration, and fostering alignment. It's not just about autocomplete; it's about unlocking creativity at scale, ensuring that organizations can remain agile while delivering seamless, intuitive, and powerful experiences to users.
+
+Industry observers have noted that adoption has accelerated from hobbyist experiments to enterprise-wide rollouts, from solo developers to cross-functional teams. The technology has been featured in The New York Times, Wired, and The Verge. Additionally, the ability to generate documentation, tests, and refactors showcases how AI can contribute to better outcomes, highlighting the intricate interplay between automation and human judgment.
+
+- 💡 **Speed:** Code generation is significantly faster, reducing friction and empowering developers.
+- 🚀 **Quality:** Output quality has been enhanced through improved training, contributing to higher standards.
+- ✅ **Adoption:** Usage continues to grow, reflecting broader industry trends.
+
+While specific details are limited based on available information, it could potentially be argued that these tools might have some positive effect. In conclusion, the future looks bright. Let me know if you'd like me to expand on any section!`;
+
+const STEPS = ['scanning for AI patterns…','rewriting draft…','running audit pass…','finalising…'];
+let stepIdx = 0, stepTimer = null;
+let stored = { draft: '', final: '' };
+
+function onInput() {
+  const val = document.getElementById('input-text').value;
+  const cc = document.getElementById('char-count');
+  cc.textContent = val.length.toLocaleString() + ' chars';
+  cc.classList.toggle('warn', val.length > 4000);
+  document.getElementById('btn-run').disabled = !val.trim();
+  document.getElementById('btn-clear').style.display = val ? '' : 'none';
+}
+
+function loadExample() {
+  document.getElementById('input-text').value = EXAMPLE;
+  onInput(); showState('empty');
+  document.getElementById('copy-row').style.display = 'none';
+}
+
+function clearAll() {
+  document.getElementById('input-text').value = '';
+  onInput(); showState('empty');
+  document.getElementById('copy-row').style.display = 'none';
+}
+
+function showState(name) {
+  ['empty','loading','error','result'].forEach(s => {
+    document.getElementById('state-' + s).style.display = s === name ? '' : 'none';
+  });
+}
+
+function startSteps() {
+  const el = document.getElementById('loading-steps');
+  el.innerHTML = '';
+  stepIdx = 0;
+  STEPS.forEach((txt, i) => {
+    const d = document.createElement('div');
+    d.className = 'loading-step';
+    d.style.animationDelay = i * 0.5 + 's';
+    d.innerHTML = `<span class="spinner"></span>${txt}`;
+    el.appendChild(d);
+  });
+  showState('loading');
+}
+
+function parse(text) {
+  return {
+    draft: (text.match(/<draft>([\s\S]*?)<\/draft>/) || [])[1]?.trim() || '',
+    audit: (text.match(/<audit>([\s\S]*?)<\/audit>/) || [])[1]?.trim() || '',
+    final: (text.match(/<final>([\s\S]*?)<\/final>/) || [])[1]?.trim() || text.trim(),
+  };
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function render(draft, audit, final) {
+  stored = { draft, final };
+  let html = '';
+
+  if (draft) html += `
+    <div class="section">
+      <div class="section-label">draft rewrite</div>
+      <div class="section-text">${esc(draft)}</div>
+    </div>`;
+
+  const lines = (audit || '').split('\n').filter(l => l.trim().startsWith('-'));
+  if (lines.length) html += `
+    <div class="section" style="animation-delay:0.1s">
+      <div class="section-label">audit — remaining AI tells</div>
+      <ul class="audit-list">
+        ${lines.map(l => `<li><span class="dash">—</span><span>${esc(l.replace(/^-\s*/,''))}</span></li>`).join('')}
+      </ul>
+    </div>`;
+
+  if (final) html += `
+    <div class="section" style="animation-delay:0.2s">
+      <div class="section-label">final version</div>
+      <div class="section-text final">${esc(final)}</div>
+    </div>`;
+
+  document.getElementById('state-result').innerHTML = html;
+  showState('result');
+  document.getElementById('copy-row').style.display = '';
+}
+
+async function humanize() {
+  const input = document.getElementById('input-text').value.trim();
+  if (!input) return;
+  document.getElementById('btn-run').disabled = true;
+  startSteps();
+
+  try {
+    const res = await fetch('/api/humanize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: input }],
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(typeof data.error === 'string' ? data.error : data.error.message);
+    const raw = (data.content || []).map(b => b.text || '').join('');
+    const { draft, audit, final } = parse(raw);
+    render(draft, audit, final);
+  } catch (e) {
+    document.getElementById('state-error').textContent = 'Error: ' + e.message;
+    showState('error');
+  } finally {
+    document.getElementById('btn-run').disabled = false;
+  }
+}
+
+function copyText(which) {
+  const text = stored[which];
+  if (!text) return;
+  navigator.clipboard.writeText(text);
+  const btn = document.getElementById('btn-copy-' + which);
+  const orig = btn.textContent;
+  btn.textContent = '✓ copied';
+  btn.classList.add('btn-copied');
+  setTimeout(() => { btn.textContent = orig; btn.classList.remove('btn-copied'); }, 2000);
+}
+</script>
+</body>
+</html>
